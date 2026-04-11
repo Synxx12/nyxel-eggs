@@ -1,143 +1,125 @@
 #!/bin/bash
-# ╔══════════════════════════════════════════════════════════════╗
-# ║         Next.js Pterodactyl Entrypoint — nyxel              ║
-# ║         https://nyxel.my.id                                  ║
-# ╚══════════════════════════════════════════════════════════════╝
+# ============================================================
+#   nyxel-eggs — Next.js entrypoint
+#   https://nyxel.my.id
+# ============================================================
 
-set -euo pipefail
-
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
-CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
-
-log()  { echo -e "${CYAN}[EGG]${RESET} $*"; }
-ok()   { echo -e "${GREEN}[EGG] ✓${RESET} $*"; }
-warn() { echo -e "${YELLOW}[EGG] ⚠${RESET} $*"; }
-fail() { echo -e "${RED}[EGG] ✗${RESET} $*"; exit 1; }
-
-echo -e "${BOLD}${CYAN}"
-echo "  ███╗   ██╗███████╗██╗  ██╗████████╗   ██╗███████╗"
-echo "  ████╗  ██║██╔════╝╚██╗██╔╝╚══██╔══╝   ██║██╔════╝"
-echo "  ██╔██╗ ██║█████╗   ╚███╔╝    ██║      ██║███████╗"
-echo "  ██║╚██╗██║██╔══╝   ██╔██╗    ██║ ██   ██║╚════██║"
-echo "  ██║ ╚████║███████╗██╔╝ ██╗   ██║ ╚█████╔╝███████║"
-echo "  ╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝   ╚═╝  ╚════╝ ╚══════╝"
-echo -e "${RESET}${CYAN}  Pterodactyl Egg by nyxel — https://nyxel.my.id${RESET}"
+echo ""
+echo "  ███╗   ██╗██╗   ██╗██╗  ██╗███████╗██╗"
+echo "  ████╗  ██║╚██╗ ██╔╝╚██╗██╔╝██╔════╝██║"
+echo "  ██╔██╗ ██║ ╚████╔╝  ╚███╔╝ █████╗  ██║"
+echo "  ██║╚██╗██║  ╚██╔╝   ██╔██╗ ██╔══╝  ██║"
+echo "  ██║ ╚████║   ██║   ██╔╝ ██╗███████╗███████╗"
+echo "  ╚═╝  ╚═══╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚══════╝"
+echo ""
+echo "  🥚 nyxel-eggs — Next.js   |   nyxel.my.id"
+echo "  ──────────────────────────────────────────"
 echo ""
 
-cd /home/container || fail "Cannot cd into /home/container"
+# ── Environment ───────────────────────────────────────────
+GIT_URL="${GIT_URL:-}"
+GIT_BRANCH="${GIT_BRANCH:-main}"
+AUTO_UPDATE="${AUTO_UPDATE:-1}"
+USERNAME="${USERNAME:-}"
+ACCESS_TOKEN="${ACCESS_TOKEN:-}"
+NODE_RUN_ENV="${NODE_RUN_ENV:-production}"
+PACKAGE_MANAGER="${PACKAGE_MANAGER:-auto}"
+BUILD_COMMAND="${BUILD_COMMAND:-}"
+CLOUDFLARE_TOKEN="${CLOUDFLARE_TOKEN:-}"
 
-# ── Git ───────────────────────────────────────────────────────────────────────
-GIT_URL="${GIT_URL:-}"; GIT_BRANCH="${GIT_BRANCH:-}"
-AUTO_UPDATE="${AUTO_UPDATE:-1}"; USERNAME="${USERNAME:-}"; ACCESS_TOKEN="${ACCESS_TOKEN:-}"
+cd /home/container
 
-if [ -n "${GIT_URL}" ]; then
-  AUTHENTICATED_URL="${GIT_URL}"
-  if [ -n "${USERNAME}" ] && [ -n "${ACCESS_TOKEN}" ]; then
-    AUTHENTICATED_URL="https://${USERNAME}:${ACCESS_TOKEN}@$(echo "${GIT_URL}" | sed 's|https://||')"
-  fi
+# ── Git credentials ────────────────────────────────────────
+CLONE_URL="$GIT_URL"
+if [ -n "$GIT_URL" ] && [ -n "$USERNAME" ] && [ -n "$ACCESS_TOKEN" ]; then
+  CLONE_URL="https://${USERNAME}:${ACCESS_TOKEN}@$(echo "$GIT_URL" | sed 's|https://||')"
+fi
 
+# ── Clone or update repo ───────────────────────────────────
+if [ -n "$GIT_URL" ]; then
   if [ -d /home/container/.git ]; then
-    if [ "${AUTO_UPDATE}" = "1" ]; then
-      log "Auto-update — pulling latest commits..."
-      git -C /home/container remote set-url origin "${AUTHENTICATED_URL}" 2>/dev/null || true
-      git -C /home/container reset --hard
-      git -C /home/container pull origin "${GIT_BRANCH:-$(git -C /home/container symbolic-ref --short HEAD 2>/dev/null || echo main)}" || warn "git pull failed"
-      ok "Repository updated."
+    if [ "$AUTO_UPDATE" = "1" ]; then
+      echo "[GIT] Auto-updating repository..."
+      git config remote.origin.url "$CLONE_URL" 2>/dev/null || true
+      git fetch origin
+      git reset --hard "origin/${GIT_BRANCH}" 2>/dev/null || git reset --hard
+      echo "[GIT] Updated to latest."
     else
-      log "Auto-update disabled."
+      echo "[GIT] AUTO_UPDATE=0 — skipping pull."
     fi
   else
-    log "Cloning repository..."
-    CLONE_ARGS=("${AUTHENTICATED_URL}" /tmp/nextjs_clone)
-    if [ -n "${GIT_BRANCH}" ]; then
-      git clone --single-branch --branch "${GIT_BRANCH}" "${CLONE_ARGS[@]}" || fail "git clone failed"
+    echo "[GIT] Cloning repository..."
+    find /home/container -mindepth 1 \
+      -not -path '/home/container/.pterodactyl*' \
+      -delete 2>/dev/null || true
+
+    if [ -z "$GIT_BRANCH" ]; then
+      git clone "$CLONE_URL" /tmp/repo_clone
     else
-      git clone "${CLONE_ARGS[@]}" || fail "git clone failed"
+      git clone --single-branch --branch "$GIT_BRANCH" "$CLONE_URL" /tmp/repo_clone
     fi
-    find /home/container -mindepth 1 -not -path '/home/container/.pterodactyl*' -delete 2>/dev/null || true
-    cp -a /tmp/nextjs_clone/. /home/container/
-    rm -rf /tmp/nextjs_clone
-    ok "Repository cloned."
+    cp -a /tmp/repo_clone/. /home/container/
+    rm -rf /tmp/repo_clone
+    echo "[GIT] Clone complete."
   fi
 fi
 
-# ── .env Injection ────────────────────────────────────────────────────────────
+# ── .env injection ─────────────────────────────────────────
 if [ -f /home/container/.env.pterodactyl ]; then
-  cp -f /home/container/.env.pterodactyl /home/container/.env
-  ok ".env.pterodactyl → .env"
+  echo "[ENV] Copying .env.pterodactyl → .env"
+  cp /home/container/.env.pterodactyl /home/container/.env
 fi
 
-[ -f /home/container/package.json ] || fail "No package.json found."
-
-# ── Package Manager ───────────────────────────────────────────────────────────
-PACKAGE_MANAGER="${PACKAGE_MANAGER:-auto}"
-if [ "${PACKAGE_MANAGER}" = "auto" ]; then
-  if [ -f /home/container/pnpm-lock.yaml ]; then PACKAGE_MANAGER="pnpm"
-  elif [ -f /home/container/yarn.lock ]; then PACKAGE_MANAGER="yarn"
-  else PACKAGE_MANAGER="npm"; fi
+# ── Detect package manager ─────────────────────────────────
+PM="$PACKAGE_MANAGER"
+if [ "$PM" = "auto" ]; then
+  if [ -f /home/container/pnpm-lock.yaml ]; then PM="pnpm";
+  elif [ -f /home/container/yarn.lock ]; then PM="yarn";
+  else PM="npm"; fi
 fi
-log "Package manager: ${BOLD}${PACKAGE_MANAGER}${RESET}"
+echo "[PKG] Using package manager: $PM"
 
-case "${PACKAGE_MANAGER}" in
+# ── Install package manager if needed ─────────────────────
+case "$PM" in
   pnpm) command -v pnpm &>/dev/null || npm install -g pnpm --quiet ;;
   yarn) command -v yarn &>/dev/null || npm install -g yarn --quiet ;;
 esac
 
-# ── Install Dependencies ──────────────────────────────────────────────────────
-log "Installing dependencies..."
+# ── Install dependencies ───────────────────────────────────
+echo "[DEPS] Installing dependencies..."
 cd /home/container
-NODE_RUN_ENV="${NODE_RUN_ENV:-production}"
-
-case "${PACKAGE_MANAGER}" in
+case "$PM" in
   pnpm) pnpm install --frozen-lockfile 2>/dev/null || pnpm install ;;
   yarn) yarn install --frozen-lockfile 2>/dev/null || yarn install ;;
   *)    [ -f package-lock.json ] && npm ci || npm install ;;
 esac
-ok "Dependencies installed."
+echo "[DEPS] Done."
 
-# ── Cloudflare Tunnel ─────────────────────────────────────────────────────────
-CLOUDFLARE_TOKEN="${CLOUDFLARE_TOKEN:-}"
-if [ -n "${CLOUDFLARE_TOKEN}" ]; then
+# ── Cloudflare Tunnel ──────────────────────────────────────
+if [ -n "$CLOUDFLARE_TOKEN" ]; then
+  echo "[CF] Starting Cloudflare Tunnel..."
   if ! command -v cloudflared &>/dev/null; then
-    ARCH=$(uname -m); case "${ARCH}" in x86_64) CF_ARCH="amd64";; aarch64) CF_ARCH="arm64";; *) CF_ARCH="amd64";; esac
-    curl -fsSL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${CF_ARCH}" -o /usr/local/bin/cloudflared && chmod +x /usr/local/bin/cloudflared || warn "cloudflared download failed"
+    curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
+      -o /usr/local/bin/cloudflared
+    chmod +x /usr/local/bin/cloudflared
   fi
-  command -v cloudflared &>/dev/null && { cloudflared tunnel --no-autoupdate run --token "${CLOUDFLARE_TOKEN}" & ok "Cloudflare Tunnel started."; }
+  cloudflared tunnel --no-autoupdate run --token "$CLOUDFLARE_TOKEN" &
 fi
 
-# ── Build & Start ─────────────────────────────────────────────────────────────
-BUILD_COMMAND="${BUILD_COMMAND:-}"
+# ── Build & Start ──────────────────────────────────────────
+export PORT="${SERVER_PORT:-3000}"
+export HOSTNAME="0.0.0.0"
 
-if [ "${NODE_RUN_ENV}" = "production" ]; then
-  log "Mode: ${BOLD}production${RESET} — building..."
-
-  if [ -n "${BUILD_COMMAND}" ]; then
-    eval "${BUILD_COMMAND}" || fail "Build failed"
-  elif grep -q '"build"' package.json; then
-    case "${PACKAGE_MANAGER}" in
-      pnpm) pnpm run build || fail "Build failed" ;;
-      yarn) yarn build     || fail "Build failed" ;;
-      *)    npm run build  || fail "Build failed" ;;
-    esac
-  else
-    fail "No build script in package.json. Add a 'build' script or set BUILD_COMMAND."
-  fi
-  ok "Build complete."
-
-  log "Starting Next.js in production mode..."
-  PORT=${SERVER_PORT:-3000} NODE_ENV=production \
-    case "${PACKAGE_MANAGER}" in
-      pnpm) pnpm run start ;;
-      yarn) yarn start     ;;
-      *)    npm run start  ;;
-    esac
-
+if [ "$NODE_RUN_ENV" = "development" ]; then
+  echo "[START] Starting Next.js in development mode..."
+  exec npx next dev --port "$PORT"
 else
-  log "Mode: ${BOLD}development${RESET} (hot-reload)"
-  PORT=${SERVER_PORT:-3000} NODE_ENV=development \
-    case "${PACKAGE_MANAGER}" in
-      pnpm) pnpm run dev ;;
-      yarn) yarn dev     ;;
-      *)    npm run dev  ;;
-    esac
+  echo "[BUILD] Building Next.js application..."
+  if [ -n "$BUILD_COMMAND" ]; then
+    eval "$BUILD_COMMAND"
+  else
+    npx next build
+  fi
+  echo "[START] Starting Next.js in production mode..."
+  exec npx next start --port "$PORT"
 fi

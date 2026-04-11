@@ -1,169 +1,122 @@
 #!/bin/bash
-# ╔══════════════════════════════════════════════════════════════╗
-# ║         Bun.js Pterodactyl Entrypoint — nyxel               ║
-# ║         https://nyxel.my.id                                  ║
-# ╚══════════════════════════════════════════════════════════════╝
+# ============================================================
+#   nyxel-eggs — Bun.js entrypoint
+#   https://nyxel.my.id
+# ============================================================
 
-set -euo pipefail
-
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
-CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
-
-log()  { echo -e "${CYAN}[EGG]${RESET} $*"; }
-ok()   { echo -e "${GREEN}[EGG] ✓${RESET} $*"; }
-warn() { echo -e "${YELLOW}[EGG] ⚠${RESET} $*"; }
-fail() { echo -e "${RED}[EGG] ✗${RESET} $*"; exit 1; }
-
-echo -e "${BOLD}${CYAN}"
-echo "  ██████╗ ██╗   ██╗███╗   ██╗   ██╗███████╗"
-echo "  ██╔══██╗██║   ██║████╗  ██║   ██║██╔════╝"
-echo "  ██████╔╝██║   ██║██╔██╗ ██║   ██║███████╗"
-echo "  ██╔══██╗██║   ██║██║╚██╗██║   ██║╚════██║"
-echo "  ██████╔╝╚██████╔╝██║ ╚████║██╗██║███████║"
-echo "  ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝╚═╝╚═╝╚══════╝"
-echo -e "${RESET}${CYAN}  Pterodactyl Egg by nyxel — https://nyxel.my.id${RESET}"
+echo ""
+echo "  ███╗   ██╗██╗   ██╗██╗  ██╗███████╗██╗"
+echo "  ████╗  ██║╚██╗ ██╔╝╚██╗██╔╝██╔════╝██║"
+echo "  ██╔██╗ ██║ ╚████╔╝  ╚███╔╝ █████╗  ██║"
+echo "  ██║╚██╗██║  ╚██╔╝   ██╔██╗ ██╔══╝  ██║"
+echo "  ██║ ╚████║   ██║   ██╔╝ ██╗███████╗███████╗"
+echo "  ╚═╝  ╚═══╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚══════╝"
+echo ""
+echo "  🥚 nyxel-eggs — Bun.js   |   nyxel.my.id"
+echo "  ──────────────────────────────────────────"
 echo ""
 
-cd /home/container || fail "Cannot cd into /home/container"
+# ── Environment ───────────────────────────────────────────
+GIT_URL="${GIT_URL:-}"
+GIT_BRANCH="${GIT_BRANCH:-main}"
+AUTO_UPDATE="${AUTO_UPDATE:-1}"
+USERNAME="${USERNAME:-}"
+ACCESS_TOKEN="${ACCESS_TOKEN:-}"
+NODE_RUN_ENV="${NODE_RUN_ENV:-production}"
+ENTRY_POINT="${ENTRY_POINT:-}"
+BUILD_COMMAND="${BUILD_COMMAND:-}"
+CLOUDFLARE_TOKEN="${CLOUDFLARE_TOKEN:-}"
 
-# ── Ensure Bun is available ───────────────────────────────────────────────────
-export PATH="$HOME/.bun/bin:/usr/local/bin:$PATH"
+# ── Ensure Bun is on PATH ──────────────────────────────────
+export PATH="$HOME/.bun/bin:/root/.bun/bin:$PATH"
 
 if ! command -v bun &>/dev/null; then
-  log "Bun not found — installing..."
-  curl -fsSL https://bun.sh/install | bash || fail "Failed to install Bun"
+  echo "[BUN] Bun not found — installing..."
+  curl -fsSL https://bun.sh/install | bash
   export PATH="$HOME/.bun/bin:$PATH"
 fi
 
-BUN_VERSION=$(bun --version 2>/dev/null || echo "unknown")
-ok "Bun version: ${BUN_VERSION}"
+echo "[BUN] Bun version: $(bun --version)"
 
-# ── Git ───────────────────────────────────────────────────────────────────────
-GIT_URL="${GIT_URL:-}"; GIT_BRANCH="${GIT_BRANCH:-}"
-AUTO_UPDATE="${AUTO_UPDATE:-1}"; USERNAME="${USERNAME:-}"; ACCESS_TOKEN="${ACCESS_TOKEN:-}"
+cd /home/container
 
-if [ -n "${GIT_URL}" ]; then
-  AUTHENTICATED_URL="${GIT_URL}"
-  if [ -n "${USERNAME}" ] && [ -n "${ACCESS_TOKEN}" ]; then
-    AUTHENTICATED_URL="https://${USERNAME}:${ACCESS_TOKEN}@$(echo "${GIT_URL}" | sed 's|https://||')"
-  fi
+# ── Git credentials ────────────────────────────────────────
+CLONE_URL="$GIT_URL"
+if [ -n "$GIT_URL" ] && [ -n "$USERNAME" ] && [ -n "$ACCESS_TOKEN" ]; then
+  CLONE_URL="https://${USERNAME}:${ACCESS_TOKEN}@$(echo "$GIT_URL" | sed 's|https://||')"
+fi
 
+# ── Clone or update repo ───────────────────────────────────
+if [ -n "$GIT_URL" ]; then
   if [ -d /home/container/.git ]; then
-    if [ "${AUTO_UPDATE}" = "1" ]; then
-      log "Auto-update — pulling latest..."
-      git -C /home/container remote set-url origin "${AUTHENTICATED_URL}" 2>/dev/null || true
-      git -C /home/container reset --hard
-      git -C /home/container pull origin "${GIT_BRANCH:-$(git -C /home/container symbolic-ref --short HEAD 2>/dev/null || echo main)}" || warn "git pull failed"
-      ok "Repository updated."
-    fi
-  else
-    log "Cloning repository..."
-    if [ -n "${GIT_BRANCH}" ]; then
-      git clone --single-branch --branch "${GIT_BRANCH}" "${AUTHENTICATED_URL}" /tmp/bun_clone || fail "git clone failed"
+    if [ "$AUTO_UPDATE" = "1" ]; then
+      echo "[GIT] Auto-updating repository..."
+      git config remote.origin.url "$CLONE_URL" 2>/dev/null || true
+      git fetch origin
+      git reset --hard "origin/${GIT_BRANCH}" 2>/dev/null || git reset --hard
+      echo "[GIT] Updated to latest."
     else
-      git clone "${AUTHENTICATED_URL}" /tmp/bun_clone || fail "git clone failed"
+      echo "[GIT] AUTO_UPDATE=0 — skipping pull."
     fi
-    find /home/container -mindepth 1 -not -path '/home/container/.pterodactyl*' -delete 2>/dev/null || true
-    cp -a /tmp/bun_clone/. /home/container/
-    rm -rf /tmp/bun_clone
-    ok "Repository cloned."
+  else
+    echo "[GIT] Cloning repository..."
+    find /home/container -mindepth 1 \
+      -not -path '/home/container/.pterodactyl*' \
+      -delete 2>/dev/null || true
+
+    if [ -z "$GIT_BRANCH" ]; then
+      git clone "$CLONE_URL" /tmp/repo_clone
+    else
+      git clone --single-branch --branch "$GIT_BRANCH" "$CLONE_URL" /tmp/repo_clone
+    fi
+    cp -a /tmp/repo_clone/. /home/container/
+    rm -rf /tmp/repo_clone
+    echo "[GIT] Clone complete."
   fi
 fi
 
-# ── .env Injection ────────────────────────────────────────────────────────────
+# ── .env injection ─────────────────────────────────────────
 if [ -f /home/container/.env.pterodactyl ]; then
-  cp -f /home/container/.env.pterodactyl /home/container/.env
-  ok ".env.pterodactyl → .env"
+  echo "[ENV] Copying .env.pterodactyl → .env"
+  cp /home/container/.env.pterodactyl /home/container/.env
 fi
 
-# ── Install Dependencies ──────────────────────────────────────────────────────
-if [ -f /home/container/package.json ]; then
-  log "Installing dependencies with bun..."
-  cd /home/container
-  bun install || fail "bun install failed"
-  ok "Dependencies installed."
-elif [ -f /home/container/bun.lockb ] || [ -f /home/container/bun.lock ]; then
-  log "Installing from lockfile..."
-  cd /home/container
-  bun install || fail "bun install failed"
-  ok "Dependencies installed."
-fi
+# ── Install dependencies ───────────────────────────────────
+echo "[DEPS] Installing dependencies with Bun..."
+cd /home/container
+bun install
+echo "[DEPS] Done."
 
-# ── Cloudflare Tunnel ─────────────────────────────────────────────────────────
-CLOUDFLARE_TOKEN="${CLOUDFLARE_TOKEN:-}"
-if [ -n "${CLOUDFLARE_TOKEN}" ]; then
+# ── Cloudflare Tunnel ──────────────────────────────────────
+if [ -n "$CLOUDFLARE_TOKEN" ]; then
+  echo "[CF] Starting Cloudflare Tunnel..."
   if ! command -v cloudflared &>/dev/null; then
-    ARCH=$(uname -m); case "${ARCH}" in x86_64) CF_ARCH="amd64";; aarch64) CF_ARCH="arm64";; *) CF_ARCH="amd64";; esac
-    curl -fsSL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${CF_ARCH}" -o /usr/local/bin/cloudflared && chmod +x /usr/local/bin/cloudflared || warn "cloudflared download failed"
+    curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
+      -o /usr/local/bin/cloudflared
+    chmod +x /usr/local/bin/cloudflared
   fi
-  command -v cloudflared &>/dev/null && { cloudflared tunnel --no-autoupdate run --token "${CLOUDFLARE_TOKEN}" & ok "Cloudflare Tunnel started."; }
+  cloudflared tunnel --no-autoupdate run --token "$CLOUDFLARE_TOKEN" &
 fi
 
-# ── Build (optional) ──────────────────────────────────────────────────────────
-BUILD_COMMAND="${BUILD_COMMAND:-}"
-if [ -n "${BUILD_COMMAND}" ]; then
-  log "Running build: ${BUILD_COMMAND}"
-  eval "${BUILD_COMMAND}" || fail "Build failed"
-  ok "Build complete."
+# ── Detect entry point ─────────────────────────────────────
+if [ -z "$ENTRY_POINT" ]; then
+  if [ -f /home/container/package.json ]; then
+    ENTRY_POINT=$(bun -e "try{const p=require('./package.json');console.log(p.main||'')}catch(e){}" 2>/dev/null || true)
+  fi
+  [ -z "$ENTRY_POINT" ] && ENTRY_POINT="src/index.ts"
 fi
 
-# ── Resolve Entry Point ───────────────────────────────────────────────────────
-ENTRY_POINT="${ENTRY_POINT:-}"
-NODE_RUN_ENV="${NODE_RUN_ENV:-production}"
+export PORT="${SERVER_PORT:-3000}"
 
-resolve_entry() {
-  if [ -n "${ENTRY_POINT}" ]; then
-    echo "${ENTRY_POINT}"; return
-  fi
-  # Try package.json main
-  if [ -f package.json ]; then
-    MAIN=$(bun -e "const p=require('./package.json'); process.stdout.write(p.main||'')" 2>/dev/null || true)
-    [ -n "${MAIN}" ] && [ -f "${MAIN}" ] && { echo "${MAIN}"; return; }
-  fi
-  # Common fallbacks
-  for f in src/index.ts index.ts src/index.js index.js src/server.ts server.ts src/app.ts app.ts; do
-    [ -f "${f}" ] && { echo "${f}"; return; }
-  done
-  echo ""
-}
-
-RESOLVED=$(resolve_entry)
-
-if [ "${NODE_RUN_ENV}" = "production" ]; then
-  log "Mode: ${BOLD}production${RESET}"
-
-  if [ -n "${RESOLVED}" ]; then
-    ok "Entry: ${RESOLVED}"
-    PORT=${SERVER_PORT:-3000} NODE_ENV=production bun run "${RESOLVED}"
-
-  elif grep -q '"start"' package.json 2>/dev/null; then
-    ok "Using bun script: start"
-    PORT=${SERVER_PORT:-3000} NODE_ENV=production bun run start
-
-  elif grep -q '"start:prod"' package.json 2>/dev/null; then
-    ok "Using bun script: start:prod"
-    PORT=${SERVER_PORT:-3000} NODE_ENV=production bun run start:prod
-
-  else
-    fail "No entry point found. Set ENTRY_POINT or add a 'start' script to package.json."
-  fi
-
+# ── Build & Start ──────────────────────────────────────────
+if [ "$NODE_RUN_ENV" = "development" ]; then
+  echo "[START] Starting Bun.js in development mode (--watch)..."
+  exec bun --watch "$ENTRY_POINT"
 else
-  log "Mode: ${BOLD}development${RESET} (hot-reload with --watch)"
-
-  if [ -n "${RESOLVED}" ]; then
-    ok "Entry: ${RESOLVED} (--watch)"
-    PORT=${SERVER_PORT:-3000} NODE_ENV=development bun --watch run "${RESOLVED}"
-
-  elif grep -q '"dev"' package.json 2>/dev/null; then
-    ok "Using bun script: dev"
-    PORT=${SERVER_PORT:-3000} NODE_ENV=development bun run dev
-
-  elif grep -q '"start:dev"' package.json 2>/dev/null; then
-    ok "Using bun script: start:dev"
-    PORT=${SERVER_PORT:-3000} NODE_ENV=development bun run start:dev
-
-  else
-    fail "No dev entry found. Set ENTRY_POINT or add a 'dev' script to package.json."
+  if [ -n "$BUILD_COMMAND" ]; then
+    echo "[BUILD] Running build: $BUILD_COMMAND"
+    eval "$BUILD_COMMAND"
   fi
+  echo "[START] Starting Bun.js in production mode..."
+  exec bun run "$ENTRY_POINT"
 fi
