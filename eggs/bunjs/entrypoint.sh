@@ -1,9 +1,27 @@
 #!/bin/bash
 # ============================================================
-#   nyxel-eggs — Bun.js entrypoint
+#   nyxel-eggs — Bun.js entrypoint (production-grade)
 #   https://nyxel.my.id
+#   Version: 2.0.0
 # ============================================================
 
+set -eo pipefail
+
+# ── Signal trap for graceful shutdown ──────────────────────
+CF_PID=""
+cleanup() {
+  echo ""
+  echo "[SHUTDOWN] Received shutdown signal, cleaning up..."
+  if [ -n "$CF_PID" ]; then
+    kill "$CF_PID" 2>/dev/null || true
+    wait "$CF_PID" 2>/dev/null || true
+    echo "[SHUTDOWN] Cloudflare Tunnel stopped."
+  fi
+  exit 0
+}
+trap cleanup SIGTERM SIGINT
+
+# ── Banner ─────────────────────────────────────────────────
 echo ""
 echo "  ███╗   ██╗██╗   ██╗██╗  ██╗███████╗██╗"
 echo "  ████╗  ██║╚██╗ ██╔╝╚██╗██╔╝██╔════╝██║"
@@ -27,7 +45,14 @@ ENTRY_POINT="${ENTRY_POINT:-}"
 BUILD_COMMAND="${BUILD_COMMAND:-}"
 CLOUDFLARE_TOKEN="${CLOUDFLARE_TOKEN:-}"
 
-# ── Ensure Bun is on PATH ──────────────────────────────────
+# ── Set NODE_ENV ───────────────────────────────────────────
+if [ "$NODE_RUN_ENV" = "production" ]; then
+  export NODE_ENV=production
+else
+  export NODE_ENV=development
+fi
+
+# ── Ensure Bun is on PATH ─────────────────────────────────
 export PATH="$HOME/.bun/bin:/root/.bun/bin:$PATH"
 
 if ! command -v bun &>/dev/null; then
@@ -36,7 +61,8 @@ if ! command -v bun &>/dev/null; then
   export PATH="$HOME/.bun/bin:$PATH"
 fi
 
-echo "[BUN] Bun version: $(bun --version)"
+echo "[INFO] Bun version: $(bun --version)"
+echo "[INFO] Environment: $NODE_RUN_ENV (NODE_ENV=$NODE_ENV)"
 
 cd /home/container
 
@@ -46,7 +72,7 @@ if [ -n "$GIT_URL" ] && [ -n "$USERNAME" ] && [ -n "$ACCESS_TOKEN" ]; then
   CLONE_URL="https://${USERNAME}:${ACCESS_TOKEN}@$(echo "$GIT_URL" | sed 's|https://||')"
 fi
 
-# ── Clone or update repo ───────────────────────────────────
+# ── Clone or update repo ──────────────────────────────────
 if [ -n "$GIT_URL" ]; then
   if [ -d /home/container/.git ]; then
     if [ "$AUTO_UPDATE" = "1" ]; then
@@ -65,74 +91,106 @@ if [ -n "$GIT_URL" ]; then
       -delete 2>/dev/null || true
 
     if [ -z "$GIT_BRANCH" ]; then
-      git clone "$CLONE_URL" /tmp/repo_clone
+      git clone --depth 1 "$CLONE_URL" /tmp/repo_clone
     else
-      git clone --single-branch --branch "$GIT_BRANCH" "$CLONE_URL" /tmp/repo_clone
+      git clone --depth 1 --single-branch --branch "$GIT_BRANCH" "$CLONE_URL" /tmp/repo_clone
     fi
     cp -a /tmp/repo_clone/. /home/container/
     rm -rf /tmp/repo_clone
     echo "[GIT] Clone complete."
   fi
+else
+  echo "[GIT] No GIT_URL set — using existing files."
 fi
 
 # ── .env injection ─────────────────────────────────────────
 if [ -f /home/container/.env.pterodactyl ]; then
-  echo "[ENV] Copying .env.pterodactyl → .env"
+  echo "[ENV] Injecting .env.pterodactyl → .env"
   cp /home/container/.env.pterodactyl /home/container/.env
 fi
 
-# ── Install dependencies ───────────────────────────────────
-echo "[DEPS] Installing dependencies with Bun..."
-cd /home/container
-bun install
-echo "[DEPS] Done."
+# ── Install dependencies ──────────────────────────────────
+if [ -f /home/container/package.json ]; then
+  echo "[DEPS] Installing dependencies with Bun..."
+  cd /home/container
+  if [ -f bun.lockb ] || [ -f bun.lock ]; then
+    bun install --frozen-lockfile 2>/dev/null || {
+      echo "[WARN] Lockfile mismatch — running clean install..."
+      bun install
+    }
+  else
+    bun install
+  fi
+  echo "[DEPS] Done."
+else
+  echo "[DEPS] No package.json found — skipping install."
+fi
 
-# ── Cloudflare Tunnel ──────────────────────────────────────
+# ── Cloudflare Tunnel ─────────────────────────────────────
 if [ -n "$CLOUDFLARE_TOKEN" ]; then
   echo "[CF] Starting Cloudflare Tunnel..."
   CF_BIN="/home/container/.pterodactyl/cloudflared"
   if [ ! -x "$CF_BIN" ]; then
     echo "[CF] Downloading cloudflared..."
     curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
-      -o "$CF_BIN" && chmod +x "$CF_BIN" || { echo "[CF] Failed to download cloudflared!"; CF_BIN=""; }
+      -o "$CF_BIN" && chmod +x "$CF_BIN" || {
+      echo "[CF] ✗ Failed to download cloudflared — continuing without tunnel."
+      CF_BIN=""
+    }
   fi
   if [ -n "$CF_BIN" ]; then
     "$CF_BIN" tunnel --no-autoupdate run --token "$CLOUDFLARE_TOKEN" &
+    CF_PID=$!
+    echo "[CF] Tunnel started (PID: $CF_PID)"
   fi
 fi
 
-# ── Detect entry point ─────────────────────────────────────
+# ── Detect entry point ────────────────────────────────────
 if [ -z "$ENTRY_POINT" ]; then
   if [ -f /home/container/package.json ]; then
-    ENTRY_POINT=$(grep -m1 '"main"' /home/container/package.json | sed 's/.*"main"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' 2>/dev/null || true)
+    # Try "main" field first, then "module"
+    ENTRY_POINT=$(grep -m1 '"main"' /home/container/package.json 2>/dev/null \
+      | sed 's/.*"main"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' || true)
+    if [ -z "$ENTRY_POINT" ]; then
+      ENTRY_POINT=$(grep -m1 '"module"' /home/container/package.json 2>/dev/null \
+        | sed 's/.*"module"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' || true)
+    fi
   fi
-  # Fallback: cek file umum jika main tidak ditemukan
+  # Fallback: scan common files
   if [ -z "$ENTRY_POINT" ]; then
     for f in index.ts src/index.ts index.js src/index.js server.ts server.js app.ts app.js; do
-      [ -f "/home/container/$f" ] && ENTRY_POINT="$f" && break
+      if [ -f "/home/container/$f" ]; then
+        ENTRY_POINT="$f"
+        break
+      fi
     done
   fi
-  [ -z "$ENTRY_POINT" ] && ENTRY_POINT="src/index.ts"
+  [ -z "$ENTRY_POINT" ] && ENTRY_POINT="index.ts"
 fi
 
 export PORT="${SERVER_PORT:-3000}"
 
-# ── Build & Start ──────────────────────────────────────────
+echo "[INFO] Entry point: $ENTRY_POINT"
+echo "[INFO] Port: $PORT"
+echo ""
+
+# ── Build & Start ─────────────────────────────────────────
 if [ "$NODE_RUN_ENV" = "development" ]; then
   echo "[START] Starting Bun.js in development mode (--watch)..."
   exec bun --watch "$ENTRY_POINT"
 else
+  # Run build step
   if [ -n "$BUILD_COMMAND" ]; then
     echo "[BUILD] Running custom build: $BUILD_COMMAND"
     eval "$BUILD_COMMAND"
-  elif [ -f package.json ] && grep -q '"build":' package.json; then
+  elif [ -f package.json ] && grep -q '"build"' package.json 2>/dev/null; then
     echo "[BUILD] Running 'bun run build'..."
     bun run build
   fi
 
-  # Fallback: Jika ENTRY_POINT adalah .ts tapi ada dist/index.js (hasil build), pakai yang .js
+  # If entry point is .ts but dist/index.js exists after build, prefer compiled version
   if [[ "$ENTRY_POINT" == *.ts ]] && [ -f "dist/index.js" ]; then
-    echo "[INFO] Found dist/index.js, switching to compiled entrypoint."
+    echo "[INFO] Found dist/index.js — using compiled entrypoint."
     ENTRY_POINT="dist/index.js"
   fi
 

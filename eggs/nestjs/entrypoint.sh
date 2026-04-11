@@ -1,9 +1,27 @@
 #!/bin/bash
 # ============================================================
-#   nyxel-eggs — NestJS entrypoint
+#   nyxel-eggs — NestJS entrypoint (production-grade)
 #   https://nyxel.my.id
+#   Version: 2.0.0
 # ============================================================
 
+set -eo pipefail
+
+# ── Signal trap for graceful shutdown ──────────────────────
+CF_PID=""
+cleanup() {
+  echo ""
+  echo "[SHUTDOWN] Received shutdown signal, cleaning up..."
+  if [ -n "$CF_PID" ]; then
+    kill "$CF_PID" 2>/dev/null || true
+    wait "$CF_PID" 2>/dev/null || true
+    echo "[SHUTDOWN] Cloudflare Tunnel stopped."
+  fi
+  exit 0
+}
+trap cleanup SIGTERM SIGINT
+
+# ── Banner ─────────────────────────────────────────────────
 echo ""
 echo "  ███╗   ██╗██╗   ██╗██╗  ██╗███████╗██╗"
 echo "  ████╗  ██║╚██╗ ██╔╝╚██╗██╔╝██╔════╝██║"
@@ -28,6 +46,16 @@ BUILD_COMMAND="${BUILD_COMMAND:-}"
 START_COMMAND="${START_COMMAND:-}"
 CLOUDFLARE_TOKEN="${CLOUDFLARE_TOKEN:-}"
 
+# ── Set NODE_ENV ───────────────────────────────────────────
+if [ "$NODE_RUN_ENV" = "production" ]; then
+  export NODE_ENV=production
+else
+  export NODE_ENV=development
+fi
+
+echo "[INFO] Node version: $(node --version)"
+echo "[INFO] Environment: $NODE_RUN_ENV (NODE_ENV=$NODE_ENV)"
+
 cd /home/container
 
 # ── Git credentials ────────────────────────────────────────
@@ -36,7 +64,7 @@ if [ -n "$GIT_URL" ] && [ -n "$USERNAME" ] && [ -n "$ACCESS_TOKEN" ]; then
   CLONE_URL="https://${USERNAME}:${ACCESS_TOKEN}@$(echo "$GIT_URL" | sed 's|https://||')"
 fi
 
-# ── Clone or update repo ───────────────────────────────────
+# ── Clone or update repo ──────────────────────────────────
 if [ -n "$GIT_URL" ]; then
   if [ -d /home/container/.git ]; then
     if [ "$AUTO_UPDATE" = "1" ]; then
@@ -55,19 +83,21 @@ if [ -n "$GIT_URL" ]; then
       -delete 2>/dev/null || true
 
     if [ -z "$GIT_BRANCH" ]; then
-      git clone "$CLONE_URL" /tmp/repo_clone
+      git clone --depth 1 "$CLONE_URL" /tmp/repo_clone
     else
-      git clone --single-branch --branch "$GIT_BRANCH" "$CLONE_URL" /tmp/repo_clone
+      git clone --depth 1 --single-branch --branch "$GIT_BRANCH" "$CLONE_URL" /tmp/repo_clone
     fi
     cp -a /tmp/repo_clone/. /home/container/
     rm -rf /tmp/repo_clone
     echo "[GIT] Clone complete."
   fi
+else
+  echo "[GIT] No GIT_URL set — using existing files."
 fi
 
 # ── .env injection ─────────────────────────────────────────
 if [ -f /home/container/.env.pterodactyl ]; then
-  echo "[ENV] Copying .env.pterodactyl → .env"
+  echo "[ENV] Injecting .env.pterodactyl → .env"
   cp /home/container/.env.pterodactyl /home/container/.env
 fi
 
@@ -86,32 +116,65 @@ case "$PM" in
   yarn) command -v yarn &>/dev/null || npm install -g yarn --quiet ;;
 esac
 
-# ── Install dependencies ───────────────────────────────────
-echo "[DEPS] Installing dependencies..."
-cd /home/container
-case "$PM" in
-  pnpm) pnpm install --frozen-lockfile 2>/dev/null || pnpm install ;;
-  yarn) yarn install --frozen-lockfile 2>/dev/null || yarn install ;;
-  *)    [ -f package-lock.json ] && npm ci || npm install ;;
-esac
-echo "[DEPS] Done."
+# ── Install dependencies ──────────────────────────────────
+if [ -f /home/container/package.json ]; then
+  echo "[DEPS] Installing dependencies..."
+  cd /home/container
+  case "$PM" in
+    pnpm)
+      pnpm install --frozen-lockfile 2>/dev/null || {
+        echo "[WARN] Lockfile mismatch — running clean install..."
+        pnpm install
+      }
+      ;;
+    yarn)
+      yarn install --frozen-lockfile 2>/dev/null || {
+        echo "[WARN] Lockfile mismatch — running clean install..."
+        yarn install
+      }
+      ;;
+    *)
+      if [ -f package-lock.json ]; then
+        npm ci
+      else
+        npm install
+      fi
+      ;;
+  esac
+  echo "[DEPS] Done."
+else
+  echo "[DEPS] No package.json found — skipping install."
+fi
 
-# ── Cloudflare Tunnel ──────────────────────────────────────
+# ── Prisma auto-generate ──────────────────────────────────
+if [ -f /home/container/prisma/schema.prisma ]; then
+  echo "[PRISMA] Generating Prisma client..."
+  npx prisma generate 2>/dev/null || echo "[WARN] Prisma generate failed — continuing."
+fi
+
+# ── Cloudflare Tunnel ─────────────────────────────────────
 if [ -n "$CLOUDFLARE_TOKEN" ]; then
   echo "[CF] Starting Cloudflare Tunnel..."
   CF_BIN="/home/container/.pterodactyl/cloudflared"
   if [ ! -x "$CF_BIN" ]; then
     echo "[CF] Downloading cloudflared..."
     curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
-      -o "$CF_BIN" && chmod +x "$CF_BIN" || { echo "[CF] Failed to download cloudflared!"; CF_BIN=""; }
+      -o "$CF_BIN" && chmod +x "$CF_BIN" || {
+      echo "[CF] ✗ Failed to download cloudflared — continuing without tunnel."
+      CF_BIN=""
+    }
   fi
   if [ -n "$CF_BIN" ]; then
     "$CF_BIN" tunnel --no-autoupdate run --token "$CLOUDFLARE_TOKEN" &
+    CF_PID=$!
+    echo "[CF] Tunnel started (PID: $CF_PID)"
   fi
 fi
 
-# ── Build & Start ──────────────────────────────────────────
+# ── Build & Start ─────────────────────────────────────────
 export PORT="${SERVER_PORT:-3000}"
+echo "[INFO] Port: $PORT"
+echo ""
 
 if [ "$NODE_RUN_ENV" = "development" ]; then
   echo "[START] Starting NestJS in development mode (hot-reload)..."
