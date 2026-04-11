@@ -139,9 +139,10 @@ if [ -n "$CLOUDFLARE_TOKEN" ]; then
     }
   fi
   if [ -n "$CF_BIN" ]; then
-    "$CF_BIN" tunnel --no-autoupdate run --token "$CLOUDFLARE_TOKEN" &
+    "$CF_BIN" tunnel --no-autoupdate run --token "$CLOUDFLARE_TOKEN" \
+      > /home/container/.pterodactyl/cloudflared.log 2>&1 &
     CF_PID=$!
-    echo "[CF] Tunnel started (PID: $CF_PID)"
+    echo "[CF] Tunnel started (PID: $CF_PID) — logs: .pterodactyl/cloudflared.log"
   fi
 fi
 
