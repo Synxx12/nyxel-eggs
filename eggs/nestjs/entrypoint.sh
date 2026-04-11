@@ -123,7 +123,7 @@ else
 
   echo "[START] Starting NestJS in production mode..."
   if [ -n "$START_COMMAND" ]; then
-    eval "$START_COMMAND"
+    exec bash -c "$START_COMMAND"
   elif [ -f dist/main.js ]; then
     exec node dist/main.js
   else
