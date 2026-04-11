@@ -90,18 +90,27 @@ echo "[DEPS] Done."
 # ── Cloudflare Tunnel ──────────────────────────────────────
 if [ -n "$CLOUDFLARE_TOKEN" ]; then
   echo "[CF] Starting Cloudflare Tunnel..."
-  if ! command -v cloudflared &>/dev/null; then
+  CF_BIN="/home/container/.pterodactyl/cloudflared"
+  if [ ! -x "$CF_BIN" ]; then
+    echo "[CF] Downloading cloudflared..."
     curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
-      -o /usr/local/bin/cloudflared
-    chmod +x /usr/local/bin/cloudflared
+      -o "$CF_BIN" && chmod +x "$CF_BIN" || { echo "[CF] Failed to download cloudflared!"; CF_BIN=""; }
   fi
-  cloudflared tunnel --no-autoupdate run --token "$CLOUDFLARE_TOKEN" &
+  if [ -n "$CF_BIN" ]; then
+    "$CF_BIN" tunnel --no-autoupdate run --token "$CLOUDFLARE_TOKEN" &
+  fi
 fi
 
 # ── Detect entry point ─────────────────────────────────────
 if [ -z "$ENTRY_POINT" ]; then
   if [ -f /home/container/package.json ]; then
-    ENTRY_POINT=$(bun -e "try{const p=require('./package.json');console.log(p.main||'')}catch(e){}" 2>/dev/null || true)
+    ENTRY_POINT=$(grep -m1 '"main"' /home/container/package.json | sed 's/.*"main"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' 2>/dev/null || true)
+  fi
+  # Fallback: cek file umum jika main tidak ditemukan
+  if [ -z "$ENTRY_POINT" ]; then
+    for f in index.ts src/index.ts index.js src/index.js server.ts server.js app.ts app.js; do
+      [ -f "/home/container/$f" ] && ENTRY_POINT="$f" && break
+    done
   fi
   [ -z "$ENTRY_POINT" ] && ENTRY_POINT="src/index.ts"
 fi
