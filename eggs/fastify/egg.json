@@ -6,7 +6,7 @@
   },
   "exported_at": "2025-01-01T00:00:00+07:00",
   "name": "Fastify",
-  "author": "https://nyxel.my.id",
+  "author": "support@nyxel.my.id",
   "description": "Host a Fastify Node.js application with auto-update, private repo support, production/development modes, optional Cloudflare Tunnel, and .env injection.",
   "features": [],
   "docker_images": {
