@@ -123,9 +123,19 @@ if [ "$NODE_RUN_ENV" = "development" ]; then
   exec bun --watch "$ENTRY_POINT"
 else
   if [ -n "$BUILD_COMMAND" ]; then
-    echo "[BUILD] Running build: $BUILD_COMMAND"
+    echo "[BUILD] Running custom build: $BUILD_COMMAND"
     eval "$BUILD_COMMAND"
+  elif [ -f package.json ] && grep -q '"build":' package.json; then
+    echo "[BUILD] Running 'bun run build'..."
+    bun run build
   fi
+
+  # Fallback: Jika ENTRY_POINT adalah .ts tapi ada dist/index.js (hasil build), pakai yang .js
+  if [[ "$ENTRY_POINT" == *.ts ]] && [ -f "dist/index.js" ]; then
+    echo "[INFO] Found dist/index.js, switching to compiled entrypoint."
+    ENTRY_POINT="dist/index.js"
+  fi
+
   echo "[START] Starting Bun.js in production mode..."
   exec bun run "$ENTRY_POINT"
 fi

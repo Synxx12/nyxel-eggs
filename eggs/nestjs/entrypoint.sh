@@ -99,12 +99,15 @@ echo "[DEPS] Done."
 # ── Cloudflare Tunnel ──────────────────────────────────────
 if [ -n "$CLOUDFLARE_TOKEN" ]; then
   echo "[CF] Starting Cloudflare Tunnel..."
-  if ! command -v cloudflared &>/dev/null; then
+  CF_BIN="/home/container/.pterodactyl/cloudflared"
+  if [ ! -x "$CF_BIN" ]; then
+    echo "[CF] Downloading cloudflared..."
     curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
-      -o /usr/local/bin/cloudflared
-    chmod +x /usr/local/bin/cloudflared
+      -o "$CF_BIN" && chmod +x "$CF_BIN" || { echo "[CF] Failed to download cloudflared!"; CF_BIN=""; }
   fi
-  cloudflared tunnel --no-autoupdate run --token "$CLOUDFLARE_TOKEN" &
+  if [ -n "$CF_BIN" ]; then
+    "$CF_BIN" tunnel --no-autoupdate run --token "$CLOUDFLARE_TOKEN" &
+  fi
 fi
 
 # ── Build & Start ──────────────────────────────────────────
