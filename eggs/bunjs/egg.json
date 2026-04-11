@@ -10,7 +10,7 @@
   "description": "Host any Bun.js application (Elysia, Hono, plain Bun) with auto-update, private repo support, production/development modes, optional Cloudflare Tunnel, and .env injection.",
   "features": [],
   "docker_images": {
-    "Bun 1.x \u2713 Recommended": "ghcr.io/parkervcp/yolks:bun_1",
+    "Bun 1.x \u2713 Recommended": "ghcr.io/ptero-eggs/yolks:bun_canary",
     "Node.js 22 (fallback)": "ghcr.io/parkervcp/yolks:nodejs_22"
   },
   "file_denylist": [],
