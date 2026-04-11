@@ -1,0 +1,123 @@
+{
+  "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PTERODACTYL PANEL - PTERODACTYL.IO",
+  "meta": {
+    "version": "PTDL_v2",
+    "update_url": null
+  },
+  "exported_at": "2025-01-01T00:00:00+07:00",
+  "name": "Bun.js",
+  "author": "https://nyxel.my.id",
+  "description": "Host any Bun.js application (Elysia, Hono, plain Bun) with auto-update, private repo support, production/development modes, optional Cloudflare Tunnel, and .env injection.",
+  "features": null,
+  "docker_images": {
+    "Bun 1.x ✓ Recommended": "ghcr.io/parkervcp/yolks:bun_1",
+    "Node.js 22 (fallback)": "ghcr.io/parkervcp/yolks:nodejs_22"
+  },
+  "file_denylist": [],
+  "startup": "bash -c \"mkdir -p /home/container/.pterodactyl && curl -fsSL https://raw.githubusercontent.com/Synxx12/nyxel-eggs/main/eggs/bunjs/entrypoint.sh -o /home/container/.pterodactyl/entrypoint.sh || { echo '[EGG] Failed to download entrypoint!'; exit 1; } && chmod +x /home/container/.pterodactyl/entrypoint.sh && bash /home/container/.pterodactyl/entrypoint.sh\"",
+  "config": {
+    "files": "{}",
+    "startup": "{\n  \"done\": [\n    \"listening on\",\n    \"Bun is running\",\n    \"Server started\",\n    \"started server on\",\n    \"Elysia started\",\n    \"ready\"\n  ]\n}",
+    "logs": "{}",
+    "stop": "^^C"
+  },
+  "scripts": {
+    "installation": {
+      "script": "#!/bin/bash\n# Bun.js Installation Script — nyxel\n\nset -e\n\napt-get update -y\napt-get install -y git curl unzip\n\n# Install Bun if not available\nif ! command -v bun &>/dev/null; then\n  echo \"[INSTALL] Installing Bun...\"\n  curl -fsSL https://bun.sh/install | bash\n  export PATH=\"$HOME/.bun/bin:$PATH\"\nfi\n\nmkdir -p /mnt/server/.pterodactyl\ncurl -fsSL https://raw.githubusercontent.com/Synxx12/nyxel-eggs/main/eggs/bunjs/entrypoint.sh -o /mnt/server/.pterodactyl/entrypoint.sh\nchmod +x /mnt/server/.pterodactyl/entrypoint.sh\n\ncd /mnt/server\n\nif [ -n \"${GIT_URL}\" ]; then\n  if [ -n \"${USERNAME}\" ] && [ -n \"${ACCESS_TOKEN}\" ]; then\n    GIT_URL=\"https://${USERNAME}:${ACCESS_TOKEN}@$(echo ${GIT_URL} | sed 's|https://||')\"\n  fi\n  if [ -d /mnt/server/.git ]; then\n    git reset --hard && git pull\n  else\n    find /mnt/server -mindepth 1 -not -path '/mnt/server/.pterodactyl*' -delete 2>/dev/null || true\n    if [ -z \"${GIT_BRANCH}\" ]; then git clone \"${GIT_URL}\" /tmp/r; else git clone --single-branch --branch \"${GIT_BRANCH}\" \"${GIT_URL}\" /tmp/r; fi\n    cp -a /tmp/r/. /mnt/server/ && rm -rf /tmp/r\n  fi\n  if [ -f /mnt/server/package.json ]; then\n    cd /mnt/server\n    bun install\n  fi\nfi\n\necho \"[INSTALL] Done.\"\nexit 0",
+      "container": "node:20-bookworm-slim",
+      "entrypoint": "bash"
+    }
+  },
+  "variables": [
+    {
+      "name": "Git Repository URL",
+      "description": "HTTPS URL to your Bun.js Git repository. Leave empty to upload files manually.",
+      "env_variable": "GIT_URL",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Git Branch",
+      "description": "Branch to clone and run. Leave empty to use the repository default branch.",
+      "env_variable": "GIT_BRANCH",
+      "default_value": "main",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Auto Update",
+      "description": "Set to 1 to pull latest commits on every startup.",
+      "env_variable": "AUTO_UPDATE",
+      "default_value": "1",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|boolean",
+      "field_type": "text"
+    },
+    {
+      "name": "Git Username",
+      "description": "GitHub/GitLab username for private repositories.",
+      "env_variable": "USERNAME",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Git Access Token",
+      "description": "Personal access token with 'repo' scope.",
+      "env_variable": "ACCESS_TOKEN",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Run Environment",
+      "description": "'production' to run with Bun. 'development' for bun --watch hot-reload.",
+      "env_variable": "NODE_RUN_ENV",
+      "default_value": "production",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string|in:production,development",
+      "field_type": "text"
+    },
+    {
+      "name": "Entry Point",
+      "description": "Main file to run (e.g. src/index.ts, index.ts, server.ts). Auto-detected from package.json if empty.",
+      "env_variable": "ENTRY_POINT",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Build Command",
+      "description": "Optional build step before start (e.g. 'bun build ./src/index.ts --outdir ./dist'). Leave empty to run directly without build.",
+      "env_variable": "BUILD_COMMAND",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Cloudflare Tunnel Token",
+      "description": "CF Zero Trust tunnel token. Leave empty to disable.",
+      "env_variable": "CLOUDFLARE_TOKEN",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    }
+  ]
+}

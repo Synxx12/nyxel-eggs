@@ -1,0 +1,126 @@
+{
+  "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PTERODACTYL PANEL - PTERODACTYL.IO",
+  "meta": {
+    "version": "PTDL_v2",
+    "update_url": null
+  },
+  "exported_at": "2025-01-01T00:00:00+07:00",
+  "name": "Next.js",
+  "author": "https://nyxel.my.id",
+  "description": "Host a Next.js application with auto-update, private repo support, production/development modes, optional Cloudflare Tunnel, and configurable package manager.",
+  "features": null,
+  "docker_images": {
+    "Node.js 24": "ghcr.io/parkervcp/yolks:nodejs_24",
+    "Node.js 23": "ghcr.io/parkervcp/yolks:nodejs_23",
+    "Node.js 22 (LTS) ✓ Recommended": "ghcr.io/parkervcp/yolks:nodejs_22",
+    "Node.js 20 (LTS)": "ghcr.io/parkervcp/yolks:nodejs_20",
+    "Node.js 18 (LTS)": "ghcr.io/parkervcp/yolks:nodejs_18"
+  },
+  "file_denylist": [],
+  "startup": "bash -c \"mkdir -p /home/container/.pterodactyl && curl -fsSL https://raw.githubusercontent.com/Synxx12/nyxel-eggs/main/eggs/nextjs/entrypoint.sh -o /home/container/.pterodactyl/entrypoint.sh || { echo '[EGG] Failed to download entrypoint!'; exit 1; } && chmod +x /home/container/.pterodactyl/entrypoint.sh && bash /home/container/.pterodactyl/entrypoint.sh\"",
+  "config": {
+    "files": "{}",
+    "startup": "{\n  \"done\": [\n    \"ready on\",\n    \"started server on\",\n    \"Local: http://\",\n    \"Compiled successfully\",\n    \"listening on\",\n    \"\\u25b2 Next.js\"\n  ]\n}",
+    "logs": "{}",
+    "stop": "^^C"
+  },
+  "scripts": {
+    "installation": {
+      "script": "#!/bin/bash\n# Next.js Installation Script — nyxel\n\nset -e\n\napt-get update -y\napt-get install -y git curl jq file unzip make gcc g++ python3 python3-dev libtool\n\nmkdir -p /mnt/server/.pterodactyl\n\ncurl -fsSL https://raw.githubusercontent.com/Synxx12/nyxel-eggs/main/eggs/nextjs/entrypoint.sh -o /mnt/server/.pterodactyl/entrypoint.sh\nchmod +x /mnt/server/.pterodactyl/entrypoint.sh\necho \"[INSTALL] entrypoint.sh downloaded.\"\n\ncd /mnt/server\n\nif [ -n \"${GIT_URL}\" ]; then\n  if [ -n \"${USERNAME}\" ] && [ -n \"${ACCESS_TOKEN}\" ]; then\n    GIT_URL=\"https://${USERNAME}:${ACCESS_TOKEN}@$(echo ${GIT_URL} | sed 's|https://||')\"\n  fi\n\n  if [ -d /mnt/server/.git ]; then\n    echo \"[INSTALL] Git repo already present — pulling latest...\"\n    git reset --hard\n    git pull\n  else\n    echo \"[INSTALL] Cloning repository...\"\n    find /mnt/server -mindepth 1 -not -path '/mnt/server/.pterodactyl*' -delete 2>/dev/null || true\n    if [ -z \"${GIT_BRANCH}\" ]; then\n      git clone \"${GIT_URL}\" /tmp/repo_clone\n    else\n      git clone --single-branch --branch \"${GIT_BRANCH}\" \"${GIT_URL}\" /tmp/repo_clone\n    fi\n    cp -a /tmp/repo_clone/. /mnt/server/\n    rm -rf /tmp/repo_clone\n  fi\n\n  if [ -f /mnt/server/package.json ]; then\n    cd /mnt/server\n    PM=\"${PACKAGE_MANAGER:-auto}\"\n    if [ \"$PM\" = \"auto\" ]; then\n      if [ -f pnpm-lock.yaml ]; then PM=\"pnpm\";\n      elif [ -f yarn.lock ]; then PM=\"yarn\";\n      else PM=\"npm\"; fi\n    fi\n    case \"$PM\" in\n      pnpm) npm install -g pnpm --quiet && (pnpm install --frozen-lockfile 2>/dev/null || pnpm install) ;;\n      yarn) npm install -g yarn --quiet && (yarn install --frozen-lockfile 2>/dev/null || yarn install) ;;\n      *)    if [ -f package-lock.json ]; then npm ci; else npm install; fi ;;\n    esac\n  fi\nelse\n  echo \"[INSTALL] GIT_URL is empty — upload project files via File Manager.\"\nfi\n\necho \"[INSTALL] Done.\"\nexit 0",
+      "container": "node:20-bookworm-slim",
+      "entrypoint": "bash"
+    }
+  },
+  "variables": [
+    {
+      "name": "Git Repository URL",
+      "description": "HTTPS URL to your Git repository. Leave empty to upload files manually.",
+      "env_variable": "GIT_URL",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Git Branch",
+      "description": "Branch to clone and run. Leave empty to use the repository default branch.",
+      "env_variable": "GIT_BRANCH",
+      "default_value": "main",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Auto Update",
+      "description": "Set to 1 to pull latest commits on every startup.",
+      "env_variable": "AUTO_UPDATE",
+      "default_value": "1",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|boolean",
+      "field_type": "text"
+    },
+    {
+      "name": "Git Username",
+      "description": "GitHub/GitLab username for private repositories.",
+      "env_variable": "USERNAME",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Git Access Token",
+      "description": "Personal access token with 'repo' scope for private repositories.",
+      "env_variable": "ACCESS_TOKEN",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Run Environment",
+      "description": "'production' for next build + next start. 'development' for next dev (hot-reload).",
+      "env_variable": "NODE_RUN_ENV",
+      "default_value": "production",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string|in:production,development",
+      "field_type": "text"
+    },
+    {
+      "name": "Package Manager",
+      "description": "auto, npm, pnpm, or yarn. 'auto' detects from lockfile.",
+      "env_variable": "PACKAGE_MANAGER",
+      "default_value": "auto",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string|in:auto,npm,pnpm,yarn",
+      "field_type": "text"
+    },
+    {
+      "name": "Build Command",
+      "description": "Override default 'next build'. For monorepos: e.g. 'turbo build'.",
+      "env_variable": "BUILD_COMMAND",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Cloudflare Tunnel Token",
+      "description": "CF Zero Trust tunnel token. Leave empty to disable.",
+      "env_variable": "CLOUDFLARE_TOKEN",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    }
+  ]
+}
