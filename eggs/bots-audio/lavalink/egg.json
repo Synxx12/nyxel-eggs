@@ -1,0 +1,93 @@
+{
+  "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PTERODACTYL PANEL - PTERODACTYL.IO",
+  "meta": {
+    "version": "PTDL_v2",
+    "update_url": "https://raw.githubusercontent.com/Synxx12/nyxel-eggs/main/eggs/bots-audio/lavalink/egg.json"
+  },
+  "exported_at": "2025-01-01T00:00:00+07:00",
+  "name": "Lavalink",
+  "author": "https://nyxel.my.id",
+  "description": "Lavalink is a standalone audio streaming node for Discord bots, built on Lavaplayer. Powers high-quality, low-latency music playback without burdening your bot process. Maintained by nyxel-eggs.",
+  "features": null,
+  "docker_images": {
+    "Java 21 ✓ Recommended": "ghcr.io/parkervcp/yolks:java_21",
+    "Java 17": "ghcr.io/parkervcp/yolks:java_17"
+  },
+  "file_denylist": [],
+  "startup": "bash -c \"mkdir -p /home/container/.pterodactyl && curl -fsSL https://raw.githubusercontent.com/Synxx12/nyxel-eggs/main/eggs/bots-audio/lavalink/entrypoint.sh -o /home/container/.pterodactyl/entrypoint.sh || { echo '[EGG] Failed to download entrypoint!'; exit 1; } && chmod +x /home/container/.pterodactyl/entrypoint.sh && bash /home/container/.pterodactyl/entrypoint.sh\"",
+  "config": {
+    "files": "{}",
+    "startup": "{\"done\": [\"Lavalink is ready to accept connections\", \"Started Launcher\"]}",
+    "logs": "{}",
+    "stop": "^^C"
+  },
+  "scripts": {
+    "installation": {
+      "script": "#!/bin/bash\n# Lavalink Installation Script — nyxel\n\nset -e\n\napt-get update -y\napt-get install -y curl jq\n\nmkdir -p /mnt/server/.pterodactyl\n\ncurl -fsSL https://raw.githubusercontent.com/Synxx12/nyxel-eggs/main/eggs/bots-audio/lavalink/entrypoint.sh -o /mnt/server/.pterodactyl/entrypoint.sh\nchmod +x /mnt/server/.pterodactyl/entrypoint.sh\n\necho \"[INSTALL] entrypoint.sh downloaded.\"\necho \"[INSTALL] Lavalink JAR will be downloaded on first startup.\"\necho \"[INSTALL] Done.\"",
+      "container": "ghcr.io/parkervcp/yolks:java_21",
+      "entrypoint": "bash"
+    }
+  },
+  "variables": [
+    {
+      "name": "Lavalink Version",
+      "description": "The Lavalink release to run. Use 'LATEST' to always pull the newest release, or pin to a tag like 'v4.0.8'.",
+      "env_variable": "LAVALINK_VERSION",
+      "default_value": "LATEST",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string|max:20",
+      "field_type": "text"
+    },
+    {
+      "name": "Server Port",
+      "description": "The port Lavalink will listen on.",
+      "env_variable": "SERVER_PORT",
+      "default_value": "2333",
+      "user_viewable": true,
+      "user_editable": false,
+      "rules": "required|numeric|between:1024,65535",
+      "field_type": "text"
+    },
+    {
+      "name": "Server Password",
+      "description": "Password your Discord bot uses to authenticate with Lavalink. Change this from the default.",
+      "env_variable": "SERVER_PASSWORD",
+      "default_value": "youshallnotpass",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string|max:128",
+      "field_type": "text"
+    },
+    {
+      "name": "Max Memory (MB)",
+      "description": "Java heap size in MB. Recommended: 512 for small bots, 1024+ for larger deployments.",
+      "env_variable": "SERVER_MEMORY",
+      "default_value": "512",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|numeric|between:256,8192",
+      "field_type": "text"
+    },
+    {
+      "name": "Plugins",
+      "description": "Optional. Comma-separated list of plugin JAR download URLs (e.g., LavaSrc, youtube-source). Leave empty if not needed.",
+      "env_variable": "LAVALINK_PLUGINS",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Cloudflare Tunnel Token",
+      "description": "CF Zero Trust tunnel token. Leave empty to disable.",
+      "env_variable": "CLOUDFLARE_TOKEN",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    }
+  ]
+}

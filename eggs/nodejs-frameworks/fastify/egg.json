@@ -14,7 +14,7 @@
     "Node.js 20 (LTS)": "ghcr.io/parkervcp/yolks:nodejs_20"
   },
   "file_denylist": [".pterodactyl", ".env", ".git"],
-  "startup": "bash -c \"mkdir -p /home/container/.pterodactyl && curl -fsSL https://raw.githubusercontent.com/Synxx12/nyxel-eggs/main/eggs/fastify/entrypoint.sh -o /home/container/.pterodactyl/entrypoint.sh || { echo '[EGG] Failed to download entrypoint!'; exit 1; } && chmod +x /home/container/.pterodactyl/entrypoint.sh && bash /home/container/.pterodactyl/entrypoint.sh\"",
+  "startup": "bash -c \"mkdir -p /home/container/.pterodactyl && curl -fsSL https://raw.githubusercontent.com/Synxx12/nyxel-eggs/main/eggs/nodejs-frameworks/fastify/entrypoint.sh -o /home/container/.pterodactyl/entrypoint.sh || { echo '[EGG] Failed to download entrypoint!'; exit 1; } && chmod +x /home/container/.pterodactyl/entrypoint.sh && bash /home/container/.pterodactyl/entrypoint.sh\"",
   "config": {
     "files": "{}",
     "startup": "{\n  \"done\": [\n    \"Server listening at\",\n    \"Fastify is listening\",\n    \"listening on\",\n    \"started server on\",\n    \"Server started\",\n    \"ready\"\n  ]\n}",

@@ -14,7 +14,7 @@
     "Bun Canary (Bleeding Edge)": "ghcr.io/ptero-eggs/yolks:bun_canary"
   },
   "file_denylist": [".pterodactyl", ".env", ".git"],
-  "startup": "bash -c \"mkdir -p /home/container/.pterodactyl && curl -fsSL https://raw.githubusercontent.com/Synxx12/nyxel-eggs/main/eggs/bunjs/entrypoint.sh -o /home/container/.pterodactyl/entrypoint.sh || { echo '[EGG] Failed to download entrypoint!'; exit 1; } && chmod +x /home/container/.pterodactyl/entrypoint.sh && bash /home/container/.pterodactyl/entrypoint.sh\"",
+  "startup": "bash -c \"mkdir -p /home/container/.pterodactyl && curl -fsSL https://raw.githubusercontent.com/Synxx12/nyxel-eggs/main/eggs/nodejs-frameworks/bunjs/entrypoint.sh -o /home/container/.pterodactyl/entrypoint.sh || { echo '[EGG] Failed to download entrypoint!'; exit 1; } && chmod +x /home/container/.pterodactyl/entrypoint.sh && bash /home/container/.pterodactyl/entrypoint.sh\"",
   "config": {
     "files": "{}",
     "startup": "{\n  \"done\": [\n    \"listening on\",\n    \"Bun is running\",\n    \"Server started\",\n    \"started server on\",\n    \"Elysia started\",\n    \"ready\"\n  ]\n}",
