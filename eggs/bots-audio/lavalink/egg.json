@@ -6,7 +6,7 @@
   },
   "exported_at": "2025-01-01T00:00:00+07:00",
   "name": "Lavalink",
-  "author": "https://nyxel.my.id",
+  "author": "support@nyxel.my.id",
   "description": "Lavalink is a standalone audio streaming node for Discord bots, built on Lavaplayer. Powers high-quality, low-latency music playback without burdening your bot process. Maintained by nyxel-eggs.",
   "features": null,
   "docker_images": {
