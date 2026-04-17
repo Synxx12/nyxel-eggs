@@ -1,0 +1,123 @@
+{
+  "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PTERODACTYL PANEL - PTERODACTYL.IO",
+  "meta": {
+    "version": "PTDL_v2",
+    "update_url": null
+  },
+  "exported_at": "2026-04-11T00:00:00+07:00",
+  "name": "Bun.js",
+  "author": "support@nyxel.my.id",
+  "description": "Host any Bun.js application (Elysia, Hono, plain Bun) with auto-update, private repo support, production/development modes, optional Cloudflare Tunnel, and .env injection.",
+  "features": [],
+  "docker_images": {
+    "Bun Latest \u2713 Recommended": "ghcr.io/ptero-eggs/yolks:bun_latest",
+    "Bun Canary (Bleeding Edge)": "ghcr.io/ptero-eggs/yolks:bun_canary"
+  },
+  "file_denylist": [".pterodactyl", ".env", ".git"],
+  "startup": "bash -c \"mkdir -p /home/container/.pterodactyl && curl -fsSL https://raw.githubusercontent.com/Synxx12/nyxel-eggs/main/eggs/bunjs/entrypoint.sh -o /home/container/.pterodactyl/entrypoint.sh || { echo '[EGG] Failed to download entrypoint!'; exit 1; } && chmod +x /home/container/.pterodactyl/entrypoint.sh && bash /home/container/.pterodactyl/entrypoint.sh\"",
+  "config": {
+    "files": "{}",
+    "startup": "{\n  \"done\": [\n    \"listening on\",\n    \"Bun is running\",\n    \"Server started\",\n    \"started server on\",\n    \"Elysia started\",\n    \"ready\"\n  ]\n}",
+    "logs": "{}",
+    "stop": "^^C"
+  },
+  "scripts": {
+    "installation": {
+      "script": "#!/bin/bash\n# Bun.js Installation Script \u2014 nyxel v2.0\n\nset -e\n\napt-get update -y\napt-get install -y git curl unzip\n\n# Install Bun if not available\nif ! command -v bun &>/dev/null; then\n  echo \"[INSTALL] Installing Bun...\"\n  curl -fsSL https://bun.sh/install | bash\n  export PATH=\"$HOME/.bun/bin:$PATH\"\nfi\n\necho \"[INSTALL] Bun version: $(bun --version)\"\n\nmkdir -p /mnt/server/.pterodactyl\ncurl -fsSL https://raw.githubusercontent.com/Synxx12/nyxel-eggs/main/eggs/bunjs/entrypoint.sh -o /mnt/server/.pterodactyl/entrypoint.sh\nchmod +x /mnt/server/.pterodactyl/entrypoint.sh\necho \"[INSTALL] entrypoint.sh downloaded.\"\n\ncd /mnt/server\n\nif [ -n \"${GIT_URL}\" ]; then\n  if [ -n \"${USERNAME}\" ] && [ -n \"${ACCESS_TOKEN}\" ]; then\n    GIT_URL=\"https://${USERNAME}:${ACCESS_TOKEN}@$(echo ${GIT_URL} | sed 's|https://||')\"\n  fi\n  if [ -d /mnt/server/.git ]; then\n    echo \"[INSTALL] Git repo exists \u2014 pulling latest...\"\n    git reset --hard && git pull\n  else\n    echo \"[INSTALL] Cloning repository...\"\n    find /mnt/server -mindepth 1 -not -path '/mnt/server/.pterodactyl*' -delete 2>/dev/null || true\n    if [ -z \"${GIT_BRANCH}\" ]; then\n      git clone --depth 1 \"${GIT_URL}\" /tmp/repo\n    else\n      git clone --depth 1 --single-branch --branch \"${GIT_BRANCH}\" \"${GIT_URL}\" /tmp/repo\n    fi\n    cp -a /tmp/repo/. /mnt/server/ && rm -rf /tmp/repo\n  fi\n  if [ -f /mnt/server/package.json ]; then\n    echo \"[INSTALL] Installing dependencies...\"\n    cd /mnt/server && bun install\n    echo \"[INSTALL] Dependencies installed.\"\n  fi\nelse\n  echo \"[INSTALL] No GIT_URL \u2014 upload files via File Manager.\"\nfi\n\necho \"[INSTALL] Done.\"\nexit 0",
+      "container": "ghcr.io/ptero-eggs/yolks:bun_latest",
+      "entrypoint": "bash"
+    }
+  },
+  "variables": [
+    {
+      "name": "Git Repository URL",
+      "description": "HTTPS URL to your Bun.js Git repository (e.g. https://github.com/user/repo). Leave empty to skip cloning \u2014 upload files manually via File Manager.",
+      "env_variable": "GIT_URL",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Git Branch",
+      "description": "Branch to clone and run (e.g. main, master, production). Leave empty to use the repository default branch.",
+      "env_variable": "GIT_BRANCH",
+      "default_value": "main",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Auto Update",
+      "description": "Set to 1 to pull latest commits on every startup. Set to 0 to disable.",
+      "env_variable": "AUTO_UPDATE",
+      "default_value": "1",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|boolean",
+      "field_type": "text"
+    },
+    {
+      "name": "Git Username",
+      "description": "GitHub/GitLab username for private repositories. Leave empty for public repos.",
+      "env_variable": "USERNAME",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Git Access Token",
+      "description": "Personal access token for private repositories (https://github.com/settings/tokens). Requires at least 'repo' scope. Leave empty for public repos.",
+      "env_variable": "ACCESS_TOKEN",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Run Environment",
+      "description": "Set to 'production' to run with Bun directly. Set to 'development' for bun --watch hot-reload mode. Recommended: production for live servers.",
+      "env_variable": "NODE_RUN_ENV",
+      "default_value": "production",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string|in:production,development",
+      "field_type": "text"
+    },
+    {
+      "name": "Entry Point",
+      "description": "Main file to run (e.g. src/index.ts, index.ts, server.ts). Auto-detected from package.json 'main' field if empty.",
+      "env_variable": "ENTRY_POINT",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Build Command",
+      "description": "Custom build command (e.g. 'bun build ./src/index.ts --outdir ./dist'). Auto-runs 'bun run build' if a build script exists in package.json. Leave empty for auto-detection.",
+      "env_variable": "BUILD_COMMAND",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Cloudflare Tunnel Token",
+      "description": "Optional. Cloudflare Tunnel token from your Zero Trust dashboard (Networks > Tunnels > Configure > Run token). Leave empty to disable the tunnel.",
+      "env_variable": "CLOUDFLARE_TOKEN",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    }
+  ]
+}
