@@ -163,4 +163,5 @@ MIT — free to use, modify, and redistribute.
 
 ---
 
-Made with ☕ by **nyxel** — [nyxel.my.id](https://nyxel.my.id)
+Made with ☕ by **nyxel**
+
