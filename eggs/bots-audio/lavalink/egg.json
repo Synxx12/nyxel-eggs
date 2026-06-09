@@ -8,7 +8,7 @@
   "name": "Lavalink",
   "author": "support@nyxel.my.id",
   "description": "Lavalink is a standalone audio streaming node for Discord bots, built on Lavaplayer. Powers high-quality, low-latency music playback without burdening your bot process. Maintained by nyxel-eggs.",
-  "features": null,
+  "features": [],
   "docker_images": {
     "Java 21 ✓ Recommended": "ghcr.io/parkervcp/yolks:java_21",
     "Java 17": "ghcr.io/parkervcp/yolks:java_17"
@@ -42,7 +42,7 @@
     {
       "name": "Server Port",
       "description": "The port Lavalink will listen on.",
-      "env_variable": "SERVER_PORT",
+      "env_variable": "LAVALINK_PORT",
       "default_value": "2333",
       "user_viewable": true,
       "user_editable": false,
@@ -52,7 +52,7 @@
     {
       "name": "Server Password",
       "description": "Password your Discord bot uses to authenticate with Lavalink. Change this from the default.",
-      "env_variable": "SERVER_PASSWORD",
+      "env_variable": "LAVALINK_PASSWORD",
       "default_value": "youshallnotpass",
       "user_viewable": true,
       "user_editable": true,
@@ -62,7 +62,7 @@
     {
       "name": "Max Memory (MB)",
       "description": "Java heap size in MB. Recommended: 512 for small bots, 1024+ for larger deployments.",
-      "env_variable": "SERVER_MEMORY",
+      "env_variable": "LAVALINK_MEMORY",
       "default_value": "512",
       "user_viewable": true,
       "user_editable": true,

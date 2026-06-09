@@ -5,7 +5,7 @@
 #   Version: 2.0.0
 # ============================================================
 
-set -eo pipefail
+set -o pipefail
 
 # ── Signal trap for graceful shutdown ──────────────────────
 CF_PID=""
@@ -31,9 +31,6 @@ echo "  ██║ ╚████║   ██║   ██╔╝ ██╗██�
 echo "  ╚═╝  ╚═══╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚══════╝"
 echo ""
 echo "  🥚 nyxel-eggs — Next.js   |   nyxel.my.id"
-echo "  ──────────────────────────────────────────"
-echo ""
-
 # ── Environment ───────────────────────────────────────────
 GIT_URL="${GIT_URL:-}"
 GIT_BRANCH="${GIT_BRANCH:-main}"
@@ -69,9 +66,12 @@ if [ -n "$GIT_URL" ]; then
     if [ "$AUTO_UPDATE" = "1" ]; then
       echo "[GIT] Auto-updating repository..."
       git config remote.origin.url "$CLONE_URL" 2>/dev/null || true
-      git fetch origin
-      git reset --hard "origin/${GIT_BRANCH}" 2>/dev/null || git reset --hard
-      echo "[GIT] Updated to latest."
+      if git fetch origin; then
+        git reset --hard "origin/${GIT_BRANCH}" 2>/dev/null || git reset --hard || echo "[WARN] Git reset failed."
+        echo "[GIT] Updated to latest."
+      else
+        echo "[WARN] Git fetch failed. Proceeding with existing local files."
+      fi
     else
       echo "[GIT] AUTO_UPDATE=0 — skipping pull."
     fi
@@ -81,14 +81,21 @@ if [ -n "$GIT_URL" ]; then
       -not -path '/home/container/.pterodactyl*' \
       -delete 2>/dev/null || true
 
+    CLONE_SUCCESS=0
     if [ -z "$GIT_BRANCH" ]; then
-      git clone --depth 1 "$CLONE_URL" /tmp/repo_clone
+      git clone --depth 1 "$CLONE_URL" /tmp/repo_clone && CLONE_SUCCESS=1 || true
     else
-      git clone --depth 1 --single-branch --branch "$GIT_BRANCH" "$CLONE_URL" /tmp/repo_clone
+      git clone --depth 1 --single-branch --branch "$GIT_BRANCH" "$CLONE_URL" /tmp/repo_clone && CLONE_SUCCESS=1 || true
     fi
-    cp -a /tmp/repo_clone/. /home/container/
-    rm -rf /tmp/repo_clone
-    echo "[GIT] Clone complete."
+
+    if [ "$CLONE_SUCCESS" = "1" ]; then
+      cp -a /tmp/repo_clone/. /home/container/ 2>/dev/null || echo "[WARN] Failed to copy some files."
+      rm -rf /tmp/repo_clone
+      echo "[GIT] Clone complete."
+    else
+      echo "[ERROR] Git clone failed. Cannot proceed with fresh installation."
+      exit 1
+    fi
   fi
 else
   echo "[GIT] No GIT_URL set — using existing files."
@@ -97,7 +104,7 @@ fi
 # ── .env injection ─────────────────────────────────────────
 if [ -f /home/container/.env.pterodactyl ]; then
   echo "[ENV] Injecting .env.pterodactyl → .env"
-  cp /home/container/.env.pterodactyl /home/container/.env
+  cp /home/container/.env.pterodactyl /home/container/.env || echo "[WARN] Failed to inject environment variables."
 fi
 
 # ── Detect package manager ─────────────────────────────────
@@ -111,36 +118,45 @@ echo "[PKG] Using package manager: $PM"
 
 # ── Install package manager if needed ─────────────────────
 case "$PM" in
-  pnpm) command -v pnpm &>/dev/null || npm install -g pnpm --quiet ;;
-  yarn) command -v yarn &>/dev/null || npm install -g yarn --quiet ;;
+  pnpm) command -v pnpm &>/dev/null || npm install -g pnpm --quiet || echo "[WARN] Failed to install pnpm globally." ;;
+  yarn) command -v yarn &>/dev/null || npm install -g yarn --quiet || echo "[WARN] Failed to install yarn globally." ;;
 esac
 
 # ── Install dependencies ──────────────────────────────────
 if [ -f /home/container/package.json ]; then
   echo "[DEPS] Installing dependencies..."
   cd /home/container
+  INSTALL_SUCCESS=0
   case "$PM" in
     pnpm)
-      pnpm install --frozen-lockfile 2>/dev/null || {
-        echo "[WARN] Lockfile mismatch — running clean install..."
-        pnpm install
+      pnpm install --frozen-lockfile 2>/dev/null && INSTALL_SUCCESS=1 || {
+        echo "[WARN] Lockfile mismatch or pnpm install failed — trying clean install..."
+        pnpm install && INSTALL_SUCCESS=1 || echo "[WARN] pnpm install failed."
       }
       ;;
     yarn)
-      yarn install --frozen-lockfile 2>/dev/null || {
-        echo "[WARN] Lockfile mismatch — running clean install..."
-        yarn install
+      yarn install --frozen-lockfile 2>/dev/null && INSTALL_SUCCESS=1 || {
+        echo "[WARN] Lockfile mismatch or yarn install failed — trying clean install..."
+        yarn install && INSTALL_SUCCESS=1 || echo "[WARN] yarn install failed."
       }
       ;;
     *)
       if [ -f package-lock.json ]; then
-        npm ci
+        npm ci && INSTALL_SUCCESS=1 || {
+          echo "[WARN] npm ci failed — trying npm install..."
+          npm install && INSTALL_SUCCESS=1 || echo "[WARN] npm install failed."
+        }
       else
-        npm install
+        npm install && INSTALL_SUCCESS=1 || echo "[WARN] npm install failed."
       fi
       ;;
   esac
-  echo "[DEPS] Done."
+
+  if [ "$INSTALL_SUCCESS" = "1" ]; then
+    echo "[DEPS] Done."
+  else
+    echo "[WARN] Dependency installation failed. Attempting to proceed with existing node_modules..."
+  fi
 else
   echo "[DEPS] No package.json found — skipping install."
 fi
@@ -183,11 +199,23 @@ if [ "$NODE_RUN_ENV" = "development" ]; then
   exec npx next dev --port "$PORT"
 else
   echo "[BUILD] Building Next.js application..."
+  BUILD_SUCCESS=0
   if [ -n "$BUILD_COMMAND" ]; then
-    eval "$BUILD_COMMAND"
+    eval "$BUILD_COMMAND" && BUILD_SUCCESS=1 || echo "[WARN] Custom build command failed."
   else
-    npx next build
+    npx next build && BUILD_SUCCESS=1 || echo "[WARN] Next.js build failed."
   fi
-  echo "[START] Starting Next.js in production mode..."
-  exec npx next start --port "$PORT"
+
+  if [ "$BUILD_SUCCESS" = "1" ]; then
+    echo "[START] Starting Next.js in production mode..."
+    exec npx next start --port "$PORT"
+  else
+    if [ -d /home/container/.next ]; then
+      echo "[WARN] Build failed, but an existing .next folder was found. Attempting to start server with the last successful build..."
+      exec npx next start --port "$PORT"
+    else
+      echo "[ERROR] Build failed and no existing .next folder found. Cannot start Next.js."
+      exit 1
+    fi
+  fi
 fi
