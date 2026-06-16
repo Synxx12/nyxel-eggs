@@ -49,10 +49,73 @@ else
   export NODE_ENV=development
 fi
 
+# ── Disk Space Check and Auto-Cleanup ────────────────────────
+clean_disk_if_low() {
+  local needs_cleanup=0
+
+  # Test 1: Write test (Check if disk is completely full)
+  if ! touch /home/container/.disk_write_test 2>/dev/null; then
+    echo "[WARN] Disk is completely full or read-only! Emergency cleanup required."
+    needs_cleanup=1
+  else
+    rm -f /home/container/.disk_write_test
+  fi
+
+  # Test 2: Percentage check (Clean if usage > 90%)
+  if [ "$needs_cleanup" -eq 0 ] && command -v df &>/dev/null; then
+    local usage
+    usage=$(df -P /home/container 2>/dev/null | awk 'NR==2 {gsub("%","",$5); print $5}')
+    if [ -n "$usage" ] && [ "$usage" -gt 90 ]; then
+      echo "[WARN] Disk usage is very high (${usage}%). Preemptive cleanup initiated."
+      needs_cleanup=1
+    fi
+  fi
+
+  if [ "$needs_cleanup" -eq 1 ]; then
+    echo "[DISK] Starting cleanup of caches and temporary files..."
+
+    # 1. Clear Next.js cache (largest build cache)
+    if [ -d /home/container/.next/cache ]; then
+      echo "[DISK] Removing Next.js cache (.next/cache)..."
+      rm -rf /home/container/.next/cache
+    fi
+
+    # 2. Clear package manager stores/caches
+    if command -v pnpm &>/dev/null; then
+      echo "[DISK] Pruning pnpm store..."
+      pnpm store prune 2>/dev/null || true
+    fi
+    if command -v npm &>/dev/null; then
+      echo "[DISK] Cleaning npm cache..."
+      npm cache clean --force 2>/dev/null || true
+    fi
+    if command -v yarn &>/dev/null; then
+      echo "[DISK] Cleaning yarn cache..."
+      yarn cache clean 2>/dev/null || true
+    fi
+
+    # 3. Clear temporary files
+    echo "[DISK] Cleaning /tmp..."
+    rm -rf /tmp/* 2>/dev/null || true
+
+    # 4. Truncate cloudflared log
+    if [ -f /home/container/.pterodactyl/cloudflared.log ]; then
+      echo "[DISK] Truncating cloudflared.log..."
+      echo -n "" > /home/container/.pterodactyl/cloudflared.log
+    fi
+
+    echo "[DISK] Cleanup finished."
+    if command -v df &>/dev/null; then
+      df -h /home/container 2>/dev/null || true
+    fi
+  fi
+}
+
 echo "[INFO] Node version: $(node --version)"
 echo "[INFO] Environment: $NODE_RUN_ENV (NODE_ENV=$NODE_ENV)"
 
 cd /home/container
+clean_disk_if_low
 
 # ── Git credentials ────────────────────────────────────────
 CLONE_URL="$GIT_URL"
