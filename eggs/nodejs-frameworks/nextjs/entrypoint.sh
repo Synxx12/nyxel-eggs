@@ -52,6 +52,25 @@ else
   export NODE_ENV=development
 fi
 
+# ── Helper function for timeouts ──────────────────────────────
+run_with_timeout() {
+  local seconds=$1
+  shift
+  if command -v timeout &>/dev/null; then
+    timeout "$seconds" "$@"
+  else
+    # Fallback if timeout is not installed: run in background and kill after N seconds
+    "$@" &
+    local pid=$!
+    ( sleep "$seconds"; kill "$pid" 2>/dev/null ) &
+    local watchdog_pid=$!
+    wait "$pid" 2>/dev/null
+    local exit_code=$?
+    kill "$watchdog_pid" 2>/dev/null
+    return $exit_code
+  fi
+}
+
 # ── Disk Space Check and Auto-Cleanup ────────────────────────
 clean_disk_if_low() {
   local needs_cleanup=0
@@ -83,18 +102,18 @@ clean_disk_if_low() {
       rm -rf /home/container/.next/cache
     fi
 
-    # 2. Clear package manager stores/caches
+    # 2. Clear package manager stores/caches with safety timeouts
     if command -v pnpm &>/dev/null; then
-      echo "[DISK] Pruning pnpm store..."
-      pnpm store prune 2>/dev/null || true
+      echo "[DISK] Pruning pnpm store (timeout 15s)..."
+      run_with_timeout 15 pnpm store prune 2>/dev/null || true
     fi
     if command -v npm &>/dev/null; then
-      echo "[DISK] Cleaning npm cache..."
-      npm cache clean --force 2>/dev/null || true
+      echo "[DISK] Cleaning npm cache (timeout 15s)..."
+      run_with_timeout 15 npm cache clean --force 2>/dev/null || true
     fi
     if command -v yarn &>/dev/null; then
-      echo "[DISK] Cleaning yarn cache..."
-      yarn cache clean 2>/dev/null || true
+      echo "[DISK] Cleaning yarn cache (timeout 15s)..."
+      run_with_timeout 15 yarn cache clean 2>/dev/null || true
     fi
 
     # 3. Clear temporary files
