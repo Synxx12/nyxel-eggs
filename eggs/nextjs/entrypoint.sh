@@ -264,9 +264,17 @@ else
   echo "[BUILD] Building Next.js application..."
   BUILD_SUCCESS=0
   if [ -n "$BUILD_COMMAND" ]; then
-    eval "$BUILD_COMMAND" && BUILD_SUCCESS=1 || echo "[WARN] Custom build command failed."
+    eval "$BUILD_COMMAND" && BUILD_SUCCESS=1 || {
+      echo "[WARN] Custom build command failed. Attempting disk cleanup and retrying..."
+      clean_disk_if_low
+      eval "$BUILD_COMMAND" && BUILD_SUCCESS=1 || echo "[WARN] Custom build command retry failed."
+    }
   else
-    npx next build && BUILD_SUCCESS=1 || echo "[WARN] Next.js build failed."
+    npx next build && BUILD_SUCCESS=1 || {
+      echo "[WARN] Next.js build failed. Attempting disk cleanup and retrying..."
+      clean_disk_if_low
+      npx next build && BUILD_SUCCESS=1 || echo "[WARN] Next.js build retry failed."
+    }
   fi
 
   if [ "$BUILD_SUCCESS" = "1" ]; then
