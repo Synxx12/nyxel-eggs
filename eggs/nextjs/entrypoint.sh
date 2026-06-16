@@ -99,18 +99,16 @@ clean_disk_if_low() {
       rm -rf /home/container/.next/cache
     fi
 
-    # 2. Clear package manager stores/caches with safety timeouts
-    if command -v pnpm &>/dev/null; then
+    # 2. Clear only the package manager store/cache actually used by the project
+    if [ -f /home/container/pnpm-lock.yaml ] && command -v pnpm &>/dev/null; then
       echo "[DISK] Pruning pnpm store (timeout 15s)..."
       run_with_timeout 15 pnpm store prune 2>/dev/null || true
-    fi
-    if command -v npm &>/dev/null; then
-      echo "[DISK] Cleaning npm cache (timeout 15s)..."
-      run_with_timeout 15 npm cache clean --force 2>/dev/null || true
-    fi
-    if command -v yarn &>/dev/null; then
+    elif [ -f /home/container/yarn.lock ] && command -v yarn &>/dev/null; then
       echo "[DISK] Cleaning yarn cache (timeout 15s)..."
       run_with_timeout 15 yarn cache clean 2>/dev/null || true
+    elif command -v npm &>/dev/null; then
+      echo "[DISK] Cleaning npm cache (timeout 15s)..."
+      run_with_timeout 15 npm cache clean --force 2>/dev/null || true
     fi
 
     # 3. Clear temporary files
