@@ -232,6 +232,9 @@ fi
 
 # ── Cloudflare Tunnel ─────────────────────────────────────
 if [ -n "$CLOUDFLARE_TOKEN" ]; then
+  # Force localhost to resolve to IPv4 only to prevent connection refused issues on [::1]
+  sed -i '/::1.*localhost/d' /etc/hosts 2>/dev/null || true
+
   echo "[CF] Starting Cloudflare Tunnel..."
   CF_BIN="/home/container/.pterodactyl/cloudflared"
   if [ ! -x "$CF_BIN" ]; then
