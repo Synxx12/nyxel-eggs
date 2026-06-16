@@ -231,6 +231,18 @@ if [ -f /home/container/prisma/schema.prisma ]; then
 fi
 
 # ── Cloudflare Tunnel ─────────────────────────────────────
+# Try to load tunnel token from env files if present to allow overriding panel variable
+for env_file in "/home/container/.env.production" "/home/container/.env" "/home/container/.env.local"; do
+  if [ -f "$env_file" ]; then
+    ENV_TOKEN=$(grep -E "^CLOUDFLARE_TUNNEL_TOKEN=" "$env_file" | cut -d'=' -f2- | tr -d '"'\')
+    if [ -n "$ENV_TOKEN" ]; then
+      CLOUDFLARE_TOKEN="$ENV_TOKEN"
+      echo "[CF] Loaded tunnel token from $(basename "$env_file")"
+      break
+    fi
+  fi
+done
+
 if [ -n "$CLOUDFLARE_TOKEN" ]; then
   # Force localhost to resolve to IPv4 only to prevent connection refused issues on [::1]
   sed -i '/::1.*localhost/d' /etc/hosts 2>/dev/null || true
@@ -255,7 +267,7 @@ fi
 
 # ── Build & Start ─────────────────────────────────────────
 export PORT="${SERVER_PORT:-3000}"
-export HOSTNAME="0.0.0.0"
+export HOSTNAME="::"
 
 echo "[INFO] Port: $PORT"
 echo ""
